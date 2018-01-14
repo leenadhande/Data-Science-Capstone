@@ -1,0 +1,151 @@
+---
+title: "Milestone Report"
+author: "Leena Dhande"
+date: "January 14, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Summary
+
+The Capstone project for the Coursera Data Science Specialization involves using the HC Corpora Dataset. The Capstone project is done in collaboration with Swiftkey and the goal of this project is to design a shiny application with text prediction capabilities. This report will outline the exploratory analysis of the dataset and the current plans for implementing the text prediction algorithm.
+
+## Description of Data
+We need to download the source data from http://d396qusza40orc.cloudfront.net/dsscapstone/dataset/Coursera-SwiftKey.zip. The HC Corpora dataset is comprised of the output of crawls of news sites, blogs and twitter. The dataset contains 3 files across four languages (Russian, Finnish, German and English). This project will focus on the English language datasets. The names of the data files are as follows:
+
+1. en_US.blogs.txt
+2. en_US.twitter.txt
+3. en_US.news.txt
+
+The datasets will be referred to as "Blogs", "Twitter" and "News" for the remainder of this report.
+
+## Download the data
+```{r download,include=TRUE}
+if(!file.exists("Coursera-SwiftKey.zip")){
+    #Download the dataset
+    download.file("https://d396qusza40orc.cloudfront.net/dsscapstone/dataset/Coursera-SwiftKey.zip",
+                  "Coursera-SwiftKey.zip")
+    Download_Date <- Sys.time()
+    Download_Date
+    
+    #Unzip the dataset
+    unzip("Coursera-SwiftKey.zip")
+}
+```
+
+## Data Analysis
+Below, is a summary of the 3 corpus documents.
+
+```{r data, include=FALSE,echo=TRUE}
+library(tm)
+library(RWekajars)
+library(RWeka)
+library(wordcloud)
+library(knitr)
+require(openNLP)
+require(reshape)
+set.seed(892)
+sample_pct <- .4
+
+#Get files locations
+us_txt_dir <- "final/en_US/"
+blogs_txt <- paste(us_txt_dir, "en_US.blogs.txt", sep = "")
+news_txt <- paste(us_txt_dir, "en_US.news.txt", sep = "")
+twitter_txt <- paste(us_txt_dir, "en_US.twitter.txt", sep = "")
+
+#Load text into R. Lowecase to normalize future operations
+blogs_data <- tolower(readLines(blogs_txt, skipNul = T))
+news_data <- tolower(readLines(news_txt, skipNul = T))
+twitter_data <- tolower(readLines(twitter_txt, skipNul = T))
+blogs_size <- round(file.size(blogs_txt)/1048576, 2)
+news_size <- round(file.size(news_txt)/1048576, 2)
+twitter_size <- round(file.size(twitter_txt)/1048576, 2)
+
+#Get line counts
+blogs_lines <- length(blogs_data)
+news_lines <- length(news_data)
+twitter_lines <- length(twitter_data)
+
+#Get max line length
+blogs_char_cnt <- lapply(blogs_data, nchar)
+blogs_max_chars <- blogs_char_cnt[[which.max(blogs_char_cnt)]]
+
+news_char_cnt <- lapply(news_data, nchar)
+news_max_chars <- news_char_cnt[[which.max(news_char_cnt)]]
+
+twitter_char_cnt <- lapply(twitter_data, nchar)
+twitter_max_chars <- twitter_char_cnt[[which.max(twitter_char_cnt)]]
+
+#Get word counts (based on spaces)
+blogs_words <- sum( sapply(gregexpr("\\S+", blogs_data), length ) )
+news_words <- sum( sapply(gregexpr("\\S+", news_data), length ) )
+twitter_words <- sum( sapply(gregexpr("\\S+", twitter_data), length ) )
+
+#Summary of corpus stats
+corpus_stats <- data.frame( "Files" = c("Blogs", "News", "Twitter"),
+                            "Lines" = c(blogs_lines, news_lines, twitter_lines),
+                            "Longest_Line" = c(blogs_max_chars, news_max_chars, twitter_max_chars),
+                            "Words   " = c(blogs_words, news_words, twitter_words),
+                            "File_Size_Mb" = c(blogs_size, news_size, twitter_size))
+
+```
+```{r data1,include=TRUE,echo=FALSE}
+print(corpus_stats)
+
+```
+Blogs, our largest file, has the most number of words (over 37 million) but the least number of lines. The longest line in the blogs file (over 40 thousand characters) indicate that this file comprises of longer sentences and lengthier expression of ideas. News, our second largest file, also has the second largest number of lines (over 1 million), number of words (over 34 million) and longest line (over 11 thousand). I would consider the news file a good middle ground for sentence length and variety of word usage and ideas. Lastly, our Twitter file comprises of short phrases (maximum 140 characters). The Twitter file consequently has the most number of lines (over 2 million) and the least number of words (over 30 million).
+
+
+##Sampling
+Due to the large size of these files, processing the entire contents on a local computer proved to be very time consuming. So, I chose to sample the data in order to move forward as quickly as possible. For each individual corpus, I chose to randomly sample 40% (configurable) of the document prior to performing exploratory analysis. After performing exploratory analysis on each individual corpus, I chose to set a sampling percentage of 10% (configurable) for each file and combined them into a single file. The code below is how this was accomplished for the full sample:
+
+```{r sampling,include=TRUE}
+set.seed(892)
+sample_pct <- .1
+blogs_data_sample <- blogs_data[sample(1:blogs_lines, blogs_lines*sample_pct)]
+news_data_sample <- news_data[sample(1:news_lines, news_lines*sample_pct)]
+twitter_data_sample <- twitter_data[sample(1:twitter_lines, twitter_lines*sample_pct)]
+sample_data <- list(blogs_data_sample, news_data_sample, twitter_data_sample)
+```
+
+##Common Words
+Words were independently analyzed in each of the corpus files (at the higher sample rate of 40%). Subsequently all files were combined and analyzed (at a lower sample rate of 10%). The most frequent words varied per corpus, however, the words "will", "just", and "can" made the top 10 in all 3 documents. The barplot below show the details.
+
+##Blogs Data File
+Below is a summary of the most frequent words based on the blogs sampled data:
+
+```{r blogsdata,echo = FALSE}
+sample_freq <- readRDS("data/blogs_frequency.Rda")
+barplot(sample_freq[1:10], main = "Top Ten Words")
+```
+
+##News Data File
+Below is a summary of the most frequent words bases on the news sampled data:
+
+```{r newsdata,echo = FALSE}
+sample_freq <- readRDS("data/news_frequency.Rda")
+barplot(sample_freq[1:10], main = "Top Ten Words")
+```
+
+##Twitter Data File
+
+Below is a summary of the most frequent words based on the twitter sampled data:
+
+```{r twitterdata,echo = FALSE}
+sample_freq <- readRDS("data/twitter_frequency.Rda")
+barplot(sample_freq[1:10], main = "Top Ten Words")
+```
+
+##Full Data
+Below is a summary of the most frequent words base on the full sampled data:
+
+```{r fulldata,echo = FALSE}
+sample_freq <- readRDS("data/sample_frequency.Rda")
+barplot(sample_freq[1:10], main = "Top Ten Words")
+```
+
+##Next steps
+Need to develop a Shiny application that can predict the next word in a phrase.We will build an n-gram algorithm based on the above analysis for predicting the next word from the previous one, two, or three words
